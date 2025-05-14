@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"  # Sadece v1.0.0 gibi tag'ler çalıştırır
+      - "v*" # Sadece v1.0.0 gibi tag'ler çalıştırır
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.23.5"
+          go-version: ">=1.23.9"
 
       - name: Install build tools
         run: |
@@ -37,7 +37,7 @@ jobs:
           export GOARCH=${{ matrix.goarch }}
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          go build -v -o build/c_bin_pocketbase-${GOOS}-${GOARCH}${EXT} ./main.go  # Burada main.go'nun doğru yolu belirtiliyor
+          go build -v -o build/c_bin_pocketbase-${GOOS}-${GOARCH}${EXT}
 
       - name: Upload binaries to GitHub Release
         uses: softprops/action-gh-release@v1
