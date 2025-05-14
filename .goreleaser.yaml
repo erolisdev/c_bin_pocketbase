@@ -29,22 +29,22 @@ archives:
   - id: archive_cgo
     builds: [cgo_build]
     format: zip
-    files:
-      - LICENSE.md
-      - README.md
+    # files:
+    #   - LICENSE.md
+    #   - README.md
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
 
 release:
   draft: false
 
 snapshot:
-  name_template: '{{ .Tag }}-next'
+  name_template: "{{ .Tag }}-next"
 
 changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+      - "^docs:"
+      - "^test:"
