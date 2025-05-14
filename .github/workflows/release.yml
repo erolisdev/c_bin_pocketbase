@@ -3,35 +3,45 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*"  # Sadece v1.0.0 gibi tag'ler çalıştırır
 
 jobs:
-  release:
+  build:
+    name: Build & Release Binaries
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout source code
+        uses: actions/checkout@v3
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v4
         with:
-          go-version: "1.22"
+          go-version: "1.23.5"
 
-      - name: Set up Node.js (Opsiyonel — PocketBase gibi UI varsa gerekebilir)
-        uses: actions/setup-node@v4
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Build Go binary with CGO_ENABLED=1
+        run: |
+          mkdir -p build
+          export CGO_ENABLED=1
+          export GOOS=${{ matrix.goos }}
+          export GOARCH=${{ matrix.goarch }}
+          EXT=""
+          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
+          go build -v -o build/c_bin_pocketbase-${GOOS}-${GOARCH}${EXT} ./main.go  # Burada main.go'nun doğru yolu belirtiliyor
+
+      - name: Upload binaries to GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          node-version: "20"
-
-      - name: Run tests
-        run: go test ./...
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          version: latest
-          args: release --clean
+          files: build/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
