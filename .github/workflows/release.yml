@@ -28,6 +28,9 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Install MinGW-w64 cross compiler
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -35,3 +38,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CC: x86_64-w64-mingw32-gcc
