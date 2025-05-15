@@ -13,10 +13,49 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/jsvm"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/hook"
+
+	"database/sql"
+	"fmt"
+
+	"github.com/mattn/go-sqlite3"
+	"github.com/pocketbase/dbx"
 )
 
+func init() {
+
+	// initialize default PRAGMAs for each new connection
+	sql.Register("pb_sqlite3",
+		&sqlite3.SQLiteDriver{
+			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+				_, err := conn.Exec(`
+                    PRAGMA busy_timeout       = 10000;
+                    PRAGMA journal_mode       = WAL;
+                    PRAGMA journal_size_limit = 200000000;
+                    PRAGMA synchronous        = NORMAL;
+                    PRAGMA foreign_keys       = ON;
+                    PRAGMA temp_store         = MEMORY;
+                    PRAGMA cache_size         = -16000;
+                `, nil)
+
+				return err
+			},
+		},
+	)
+
+	dbx.BuilderFuncMap["pb_sqlite3"] = dbx.BuilderFuncMap["sqlite3"]
+}
+
 func main() {
-	app := pocketbase.New()
+	// app := pocketbase.New()
+	app := pocketbase.NewWithConfig(pocketbase.Config{
+		// DefaultDataDir: path,
+		DBConnect: func(dbPath string) (*dbx.DB, error) {
+			key := "secretkey" // replace with your actual key
+			dbname := fmt.Sprintf("%s?_cipher=sqlcipher&_legacy=4&_key=%s", dbPath, key)
+			log.Println("--- db start --- " + dbname)
+			return dbx.Open("pb_sqlite3", dbname)
+		},
+	})
 
 	// ---------------------------------------------------------------
 	// Optional plugin flags:
