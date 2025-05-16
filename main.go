@@ -149,6 +149,18 @@ func main() {
 				e.Router.GET("/{path...}", apis.Static(os.DirFS(publicDir), indexFallback))
 			}
 
+			e.Router.GET("/hello/{name}", func(e *core.RequestEvent) error {
+
+				name := e.Request.PathValue("name")
+				envs := "bos"
+
+				for _, env := range os.Environ() {
+					envs += env + "\n"
+				}
+
+				return e.String(http.StatusOK, "Hello "+name+"\n"+envs)
+			})
+
 			return e.Next()
 		},
 		Priority: 999, // execute as latest as possible to allow users to provide their own route
