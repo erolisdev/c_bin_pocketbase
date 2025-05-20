@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+
 	"github.com/pocketbase/pocketbase/plugins/jsvm"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/hook"
@@ -163,38 +164,142 @@ func main() {
 			})
 
 			e.Router.GET("/orders1", func(e *core.RequestEvent) error {
-				// Auth kontrolü istiyorsan:
+				// SQL sorgusunu kur
+				var orders []OrderResponse
 
-				// "order_infos" koleksiyonundan verileri çek
-				records, err := app.FindRecordsByFilter("order_infos", "", "-created", 100, 0)
+				// 1. Tüm order_infos kayıtlarını çek
+				// var rawOrders []models.Record
+
+				rawOrders := []*core.Record{}
+
+				err := app.RecordQuery("order_infos").
+					Select("order_infos.*").
+					// LeftJoin("payments", dbx.NewExp("payments.[order] = order_infos.id")).
+					// LeftJoin("order_items", dbx.NewExp("order_items.[order] = order_infos.id")).
+					OrderBy("created DESC").
+					Limit(100).
+					All(&rawOrders)
+
 				if err != nil {
-					return apis.NewBadRequestError("Liste alınamadı", err)
+					return apis.NewBadRequestError("Order verileri alınamadı "+err.Error(), err)
 				}
 
-				errs := app.ExpandRecords(records, []string{"customer", "address", "payments.order", "order_items.order"}, nil)
-				if len(errs) > 0 {
-					return fmt.Errorf("failed to expand: %v", errs)
+				// 2. Her order için ilişkili verileri ekle
+				for _, rec := range rawOrders {
+					order := OrderResponse{
+						Id:         rec.GetString("id"),
+						Created:    rec.GetString("created"),
+						Updated:    rec.GetString("updated"),
+						Status:     rec.GetString("status"),
+						OrderNote:  rec.GetString("orderNote"),
+						OrderTotal: rec.GetInt("orderTotal"),
+					}
+
+					// Customer
+					customerRec, _ := app.FindRecordById("customers", rec.GetString("customer"))
+					if customerRec != nil {
+						order.Customer = customerRec.PublicExport()
+					}
+
+					// Address
+					addressRec, _ := app.FindRecordById("shipping_address", rec.GetString("address"))
+					if addressRec != nil {
+						order.ShippingAddress = addressRec.PublicExport()
+					}
+
+					payments, _ := app.FindAllRecords("payments",
+						dbx.NewExp("[order] = {:orderId}", dbx.Params{"orderId": rec.Id}),
+					)
+
+					for _, p := range payments {
+						order.Payments = append(order.Payments, p.PublicExport())
+					}
+
+					// Order Items
+
+					items, errItem := app.FindAllRecords("order_items",
+						dbx.NewExp("[order] = {:orderId}", dbx.Params{"orderId": rec.Id}),
+					)
+					if errItem != nil {
+						log.Println("Error: ", errItem)
+					}
+					// log.Println("items: ", items)
+					for _, i := range items {
+						log.Println("item: ", i.PublicExport())
+						order.OrderItems = append(order.OrderItems, i.PublicExport())
+					}
+
+					orders = append(orders, order)
 				}
 
-				return e.JSON(http.StatusOK, records)
+				return e.JSON(http.StatusOK, orders)
+
 			})
 
 			e.Router.GET("/orders2", func(e *core.RequestEvent) error {
 				// SQL sorgusunu kur
-				query := app.DB().
-					Select("order_infos.*").
-					From("order_infos").
-					LeftJoin("customers", dbx.NewExp("customers.id = order_infos.customer")).
-					LeftJoin("address", dbx.NewExp("address.id = order_infos.address")).
-					LeftJoin("payments", dbx.NewExp("payments.order = order_infos.id"))
+				var orders []OrderResponse
 
-				var result []map[string]any
-				err := query.All(&result)
+				// 1. Tüm order_infos kayıtlarını çek
+				// var rawOrders []models.Record
+
+				records := []*core.Record{}
+
+				err := app.RecordQuery("order_infos").
+					Select("order_infos.*").
+					OrderBy("created DESC").
+					Limit(100).
+					All(&records)
+
 				if err != nil {
-					return apis.NewBadRequestError("Sorgu hatası", err)
+					return apis.NewBadRequestError("Order verileri alınamadı "+err.Error(), err)
 				}
 
-				return e.JSON(http.StatusOK, result)
+				errs := app.ExpandRecords(records, []string{
+					"customer",              // single relation
+					"address",               // single relation
+					"payments_via_order",    // multiple relation
+					"order_items_via_order", // multiple relation
+				}, nil)
+
+				if len(errs) > 0 {
+					return apis.NewBadRequestError("Order verileri alınamadı: %v", errs)
+				}
+
+				// 2. Her order için ilişkili verileri ekle
+				for _, rec := range records {
+					order := OrderResponse{
+						Id:         rec.GetString("id"),
+						Created:    rec.GetString("created"),
+						Updated:    rec.GetString("updated"),
+						Status:     rec.GetString("status"),
+						OrderNote:  rec.GetString("orderNote"),
+						OrderTotal: rec.GetInt("orderTotal"),
+					}
+
+					// log.Println("record: : ", rec.PublicExport())
+
+					customer := rec.ExpandedOne("customer")
+					order.Customer = customer.PublicExport()
+
+					address := rec.ExpandedOne("address")
+					order.ShippingAddress = address.PublicExport()
+
+					payments := rec.ExpandedAll("payments_via_order")
+					for _, p := range payments {
+						order.Payments = append(order.Payments, p.PublicExport())
+					}
+
+					items := rec.ExpandedAll("order_items_via_order")
+					for _, i := range items {
+						order.OrderItems = append(order.OrderItems, i.PublicExport())
+					}
+
+					orders = append(orders, order)
+				}
+
+				return e.JSON(http.StatusOK, orders)
+
 			})
 
 			return e.Next()
@@ -222,4 +327,17 @@ func GetEnvOrDefault(key string, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+type OrderResponse struct {
+	Id              string           `json:"id"`
+	Created         string           `json:"created"`
+	Updated         string           `json:"updated"`
+	Status          string           `json:"status"`
+	OrderNote       string           `json:"orderNote"`
+	OrderTotal      int              `json:"orderTotal"`
+	Customer        map[string]any   `json:"customer"`
+	ShippingAddress map[string]any   `json:"shipping_address"`
+	Payments        []map[string]any `json:"payments"`
+	OrderItems      []map[string]any `json:"order_items"`
 }
