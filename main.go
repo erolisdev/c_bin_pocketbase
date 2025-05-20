@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	// "github.com/labstack/echo/v5"
+
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -46,11 +48,13 @@ func init() {
 }
 
 func main() {
-	// app := pocketbase.New()
+
 	app := pocketbase.NewWithConfig(pocketbase.Config{
 		// DefaultDataDir: path,
+
 		DBConnect: func(dbPath string) (*dbx.DB, error) {
-			key := "secretkey" // replace with your actual key
+			// key := "secretkey" // replace with your actual key
+			key := GetEnvOrDefault("DB_KEY", "secretkey")
 			dbname := fmt.Sprintf("%s?_cipher=sqlcipher&_legacy=4&_key=%s", dbPath, key)
 			log.Println("--- db start --- " + dbname)
 			return dbx.Open("pb_sqlite3", dbname)
@@ -138,9 +142,6 @@ func main() {
 		Dir:          migrationsDir,
 	})
 
-	// GitHub selfupdate
-	// ghupdate.MustRegister(app, app.RootCmd, ghupdate.Config{})
-
 	// static route to serves files from the provided public dir
 	// (if publicDir exists and the route path is not already defined)
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{
@@ -152,13 +153,48 @@ func main() {
 			e.Router.GET("/hello/{name}", func(e *core.RequestEvent) error {
 
 				name := e.Request.PathValue("name")
-				envs := "bos"
+				envs := "envirenonments:\n"
 
 				for _, env := range os.Environ() {
 					envs += env + "\n"
 				}
 
 				return e.String(http.StatusOK, "Hello "+name+"\n"+envs)
+			})
+
+			e.Router.GET("/orders1", func(e *core.RequestEvent) error {
+				// Auth kontrolü istiyorsan:
+
+				// "order_infos" koleksiyonundan verileri çek
+				records, err := app.FindRecordsByFilter("order_infos", "", "-created", 100, 0)
+				if err != nil {
+					return apis.NewBadRequestError("Liste alınamadı", err)
+				}
+
+				errs := app.ExpandRecords(records, []string{"customer", "address", "payments.order", "order_items.order"}, nil)
+				if len(errs) > 0 {
+					return fmt.Errorf("failed to expand: %v", errs)
+				}
+
+				return e.JSON(http.StatusOK, records)
+			})
+
+			e.Router.GET("/orders2", func(e *core.RequestEvent) error {
+				// SQL sorgusunu kur
+				query := app.DB().
+					Select("order_infos.*").
+					From("order_infos").
+					LeftJoin("customers", dbx.NewExp("customers.id = order_infos.customer")).
+					LeftJoin("address", dbx.NewExp("address.id = order_infos.address")).
+					LeftJoin("payments", dbx.NewExp("payments.order = order_infos.id"))
+
+				var result []map[string]any
+				err := query.All(&result)
+				if err != nil {
+					return apis.NewBadRequestError("Sorgu hatası", err)
+				}
+
+				return e.JSON(http.StatusOK, result)
 			})
 
 			return e.Next()
@@ -179,4 +215,11 @@ func defaultPublicDir() string {
 	}
 
 	return filepath.Join(os.Args[0], "../pb_public")
+}
+
+func GetEnvOrDefault(key string, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }
