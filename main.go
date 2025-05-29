@@ -20,6 +20,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	_ "c_bin_pocketbase/migrations" // migrations folder
+
 	"github.com/mattn/go-sqlite3"
 	"github.com/pocketbase/dbx"
 )
@@ -136,6 +138,12 @@ func main() {
 		HooksPoolSize: hooksPool,
 	})
 
+	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
+		// enable auto creation of migration files when making collection changes in the Dashboard
+		// (the isGoRun check is to enable it only during development)
+		Automigrate: true,
+	})
+
 	// migrate command (with js templates)
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		TemplateLang: migratecmd.TemplateLangJS,
@@ -174,8 +182,6 @@ func main() {
 
 				err := app.RecordQuery("order_infos").
 					Select("order_infos.*").
-					// LeftJoin("payments", dbx.NewExp("payments.[order] = order_infos.id")).
-					// LeftJoin("order_items", dbx.NewExp("order_items.[order] = order_infos.id")).
 					OrderBy("created DESC").
 					Limit(100).
 					All(&rawOrders)
@@ -300,6 +306,11 @@ func main() {
 
 				return e.JSON(http.StatusOK, orders)
 
+			})
+
+			e.Router.GET("/list-images/:folder", func(e *core.RequestEvent) error {
+
+				return e.Next()
 			})
 
 			return e.Next()
