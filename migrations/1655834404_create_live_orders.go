@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"c_bin_pocketbase/constants"
 	"log"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -12,7 +13,7 @@ func init() {
 	m.Register(func(app core.App) error {
 
 		log.Println("Creating collection: live_orders")
-		liveOrdersCollection := core.NewBaseCollection("live_orders")
+		liveOrdersCollection := core.NewBaseCollection(constants.TableLiveOrders)
 
 		liveOrdersCollection.ViewRule = types.Pointer("@request.auth.id != ''")
 		liveOrdersCollection.CreateRule = types.Pointer("@request.auth.id != ''")
@@ -21,15 +22,18 @@ func init() {
 		// liveOrdersCollection.DeleteRule = types.Pointer("@request.auth.id != '' && @request.auth.isManager = true")
 
 		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "local_order_id"})
-		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "order_number"})
 		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "remote_order_id"})
+		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "order_number"})
 		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "web_order_number"})
+		liveOrdersCollection.Fields.Add(&core.SelectField{Name: "transaction_type", Values: []string{"L", "T"}, MaxSelect: 1, Required: true})
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "process"})
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "pos_number"})
-		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "total_tax", Min: types.Pointer(0.0), Required: true})
-		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "total_w_tax", Min: types.Pointer(0.0), Required: true})
+		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "total_ht", Min: types.Pointer(0.0), Required: true})
+		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "total_ttc", Min: types.Pointer(0.0), Required: true})
+		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "shipping_price"}) // shipping price for livraison
 		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "total_discount"})
-		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "remainder"})
+
+		// liveOrdersCollection.Fields.Add(&core.NumberField{Name: "remainder"})
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "caissier"})
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "order_status_id"})
 
@@ -41,13 +45,14 @@ func init() {
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "date"})
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "name"})
 		liveOrdersCollection.Fields.Add(&core.TextField{Name: "shipping_firstname"}) //customer name
+		liveOrdersCollection.Fields.Add(&core.NumberField{Name: "printer_id"})
 
 		// merged orders
 		liveOrdersCollection.Fields.Add(&core.BoolField{Name: "is_merged"})
 		liveOrdersCollection.Fields.Add(&core.JSONField{Name: "merged_orders"})
 		liveOrdersCollection.Fields.Add(&core.JSONField{Name: "merged_local_ids"})
 
-		customersCollection, err := app.FindCollectionByNameOrId("customers")
+		customersCollection, err := app.FindCollectionByNameOrId(constants.TableCustomers)
 		if err != nil {
 			return err
 		}

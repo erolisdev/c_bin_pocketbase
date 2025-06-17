@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"c_bin_pocketbase/constants"
 	"log"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -13,32 +14,32 @@ func init() {
 
 		log.Println("Creating collection: return_items")
 		// parca iadeler icin urun iadeleri icin
-		returnItemsCollection := core.NewBaseCollection("return_items")
+		returnItemsCollection := core.NewBaseCollection(constants.TableReturnLines)
 
 		returnItemsCollection.ViewRule = types.Pointer("@request.auth.id != ''")
 		returnItemsCollection.CreateRule = types.Pointer("@request.auth.id != ''")
 		returnItemsCollection.UpdateRule = types.Pointer("@request.auth.id != ''")
 		// returnItemsCollection.DeleteRule = types.Pointer("@request.auth.id != '' && @request.auth.isManager = true")
 
-		returnsCollection, err := app.FindCollectionByNameOrId("returns")
+		returnsCollection, err := app.FindCollectionByNameOrId(constants.TableReturns)
 		if err != nil {
 			return err
 		}
 
 		returnItemsCollection.Fields.Add(&core.RelationField{Name: "return_record", CollectionId: returnsCollection.Id, MaxSelect: 1})
 
-		saleItemsCollection, err := app.FindCollectionByNameOrId("ticket_lines")
+		ticketLinesCollection, err := app.FindCollectionByNameOrId(constants.TableTicketLines)
 		if err != nil {
 			return err
 		}
 
-		returnItemsCollection.Fields.Add(&core.RelationField{Name: "original_ticket_line", CollectionId: saleItemsCollection.Id, MaxSelect: 1})
+		returnItemsCollection.Fields.Add(&core.RelationField{Name: "original_ticket_line", CollectionId: ticketLinesCollection.Id, MaxSelect: 1})
 
 		returnItemsCollection.Fields.Add(&core.TextField{Name: "unit", Required: true})
-		returnItemsCollection.Fields.Add(&core.NumberField{Name: "quantity_unit_returned", Required: true})
-		returnItemsCollection.Fields.Add(&core.NumberField{Name: "total_ht_returned", Required: true})  // Go hook
-		returnItemsCollection.Fields.Add(&core.NumberField{Name: "total_tax_returned", Required: true}) // Go hook
-		returnItemsCollection.Fields.Add(&core.NumberField{Name: "total_ttc_returned", Required: true}) // Go hook
+		returnItemsCollection.Fields.Add(&core.NumberField{Name: "quantity", Required: true})
+		returnItemsCollection.Fields.Add(&core.NumberField{Name: "total_ht", Required: true})           // Go hook
+		returnItemsCollection.Fields.Add(&core.NumberField{Name: "total_ttc", Required: true})          // Go hook
+		returnItemsCollection.Fields.Add(&core.NumberField{Name: "total_tax", Required: true})          // Go hook
 		returnItemsCollection.Fields.Add(&core.TextField{Name: "previous_record_hash", Required: true}) // Go hook
 		returnItemsCollection.Fields.Add(&core.TextField{Name: "current_record_hash", Required: true})  // Go hook
 

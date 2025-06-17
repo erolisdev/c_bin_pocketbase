@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"c_bin_pocketbase/constants"
 	"log"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -12,7 +13,7 @@ func init() {
 	m.Register(func(app core.App) error {
 
 		log.Println("Creating collection: auth_customers")
-		customersCollection := core.NewAuthCollection("customers")
+		customersCollection := core.NewAuthCollection(constants.TableCustomers)
 
 		customersCollection.ViewRule = types.Pointer("@request.auth.id != '' && @request.auth.id = id")
 		customersCollection.UpdateRule = types.Pointer("@request.auth.id != '' && @request.auth.id = id")

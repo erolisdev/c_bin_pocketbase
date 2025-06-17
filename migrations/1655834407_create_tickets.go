@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"c_bin_pocketbase/constants"
 	"log"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -12,7 +13,7 @@ func init() {
 	m.Register(func(app core.App) error {
 
 		log.Println("Creating collection: tickets")
-		ticketsCollection := core.NewBaseCollection("tickets")
+		ticketsCollection := core.NewBaseCollection(constants.TableTickets)
 
 		// ticketsCollection.ViewRule = types.Pointer("@request.auth.id != ''")
 		// ticketsCollection.CreateRule = types.Pointer("@request.auth.id != ''")
@@ -26,8 +27,10 @@ func init() {
 		ticketsCollection.Fields.Add(&core.NumberField{Name: "ticket_no", Required: true, Min: types.Pointer(1.0)})
 		ticketsCollection.Fields.Add(&core.NumberField{Name: "order_number", Required: true, Min: types.Pointer(1.0)})
 		ticketsCollection.Fields.Add(&core.NumberField{Name: "web_order_number"})
+
+		ticketsCollection.Fields.Add(&core.SelectField{Name: "transaction_type", Values: []string{"L", "T"}, MaxSelect: 1, Required: true})
 		ticketsCollection.Fields.Add(&core.TextField{Name: "ticket_datetime"})
-		// ticketsCollection.Fields.Add(&core.TextField{Name: "created_by"})
+		ticketsCollection.Fields.Add(&core.TextField{Name: "pos_number"})
 		ticketsCollection.Fields.Add(&core.TextField{Name: "caissier"})                                                    // name of the cashier
 		ticketsCollection.Fields.Add(&core.NumberField{Name: "total_amount_ht", Min: types.Pointer(0.0), Required: true})  // Go hook
 		ticketsCollection.Fields.Add(&core.NumberField{Name: "total_tax_amount", Min: types.Pointer(0.0), Required: true}) // Go hook
@@ -36,12 +39,12 @@ func init() {
 		ticketsCollection.Fields.Add(&core.TextField{Name: "current_record_hash"})                                         // Go hook
 		ticketsCollection.Fields.Add(&core.TextField{Name: "model"})                                                       // barcode
 
-		customersCollection, err := app.FindCollectionByNameOrId("customers")
-		if err != nil {
-			return err
-		}
+		// customersCollection, err := app.FindCollectionByNameOrId("customers")
+		// if err != nil {
+		// 	return err
+		// }
+		// ticketsCollection.Fields.Add(&core.RelationField{Name: "customer", CollectionId: customersCollection.Id, MaxSelect: 1})
 
-		ticketsCollection.Fields.Add(&core.RelationField{Name: "customer", CollectionId: customersCollection.Id, MaxSelect: 1})
 		ticketsCollection.Fields.Add(&core.TextField{Name: "customer_fullname"})
 
 		ticketsCollection.Fields.Add(&core.AutodateField{Name: "updated", OnUpdate: true})

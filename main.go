@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,13 +19,18 @@ import (
 	"github.com/pocketbase/pocketbase/tools/hook"
 
 	"database/sql"
-	"fmt"
+
+	// "c_bin_pocketbase/generated"
 
 	_ "c_bin_pocketbase/migrations" // migrations folder
+	"c_bin_pocketbase/models"
+	"c_bin_pocketbase/services"
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/pocketbase/dbx"
 )
+
+// var _ core.RecordProxy = (*generated.LiveOrders)(nil)
 
 func init() {
 
@@ -59,8 +65,9 @@ func main() {
 			// key := "secretkey" // replace with your actual key
 			key := GetEnvOrDefault("DB_KEY", "secretkey")
 			dbname := fmt.Sprintf("%s?_cipher=sqlcipher&_legacy=4&_key=%s", dbPath, key)
-			log.Println("--- db start --- " + dbname)
 			return dbx.Open("pb_sqlite3", dbname)
+			// log.Println("--- db start --- test dbname: ")
+			// return dbx.Open("pb_sqlite3", dbPath)
 		},
 	})
 
@@ -308,8 +315,40 @@ func main() {
 
 			})
 
-			e.Router.GET("/list-images/:folder", func(e *core.RequestEvent) error {
+			// ================
+			e.Router.POST("/createOrder", func(e *core.RequestEvent) error {
 
+				var order models.OrderModel
+				if err := e.BindBody(&order); err != nil {
+					return apis.NewBadRequestError("Invalid request body", err)
+				}
+
+				// Verify the order
+				orderData, err := services.VerifyOrder(app, order)
+
+				if err != nil {
+					log.Printf("=== Order verification failed: %v. Order data: %+v ===", err, order)
+					return apis.NewBadRequestError("Order verification failed: "+err.Error(), nil)
+				}
+
+				// Save order
+				orderNumber, err := services.SaveOrder(app, orderData)
+
+				if err != nil {
+					// log.Printf("=== Order save failed: %v. Order number: %+v ===", err, orderNumber)
+					return apis.NewBadRequestError("Order save failed: "+err.Error(), nil)
+				}
+
+				return e.JSON(http.StatusCreated, map[string]interface{}{
+					"success":      true,
+					"total":        order.OrderData.Total,
+					"order_number": orderNumber,
+				})
+
+			})
+			// .Bind(apis.RequireAuth()) // require auth and admin role
+
+			e.Router.GET("/list-images/:folder", func(e *core.RequestEvent) error {
 				return e.Next()
 			})
 
@@ -318,9 +357,19 @@ func main() {
 		Priority: 999, // execute as latest as possible to allow users to provide their own route
 	})
 
+	// eronorhooks.OrderNumberCreate(app)
+
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func PtrValue[T any](ptr *T) T {
+	if ptr != nil {
+		return *ptr
+	}
+	var zero T
+	return zero
 }
 
 // the default pb_public dir location is relative to the executable
@@ -351,4 +400,37 @@ type OrderResponse struct {
 	ShippingAddress map[string]any   `json:"shipping_address"`
 	Payments        []map[string]any `json:"payments"`
 	OrderItems      []map[string]any `json:"order_items"`
+}
+
+// burasi dogrulama icin kullanilcak
+type ClientOrder struct {
+	TotalPriceHT  float64              `json:"total_price_ht"`
+	TotalPriceTTC float64              `json:"total_price_ttc"`
+	Products      []ClientOrderProduct `json:"products"`
+}
+
+type ClientOrderProduct struct {
+	Id            string          `json:"product_id"`
+	PriceHT       string          `json:"price_ht"`
+	PriceTTC      string          `json:"price_ttc"`
+	Quantity      int             `json:"quantity"`
+	TotalPriceHT  float64         `json:"total_price_ht"`
+	TotalPriceTTC float64         `json:"total_price_ttc"`
+	Options       *[]ClientOption `json:"options"`
+}
+
+type ClientOption struct {
+	Id            string              `json:"option_id"`
+	FreeCount     string              `json:"free_count"`
+	MaxCount      string              `json:"max_count"`
+	OptionValaues []ClientOptionValue `json:"option_values"`
+}
+
+type ClientOptionValue struct {
+	Id             string  `json:"option_value_id"`
+	PriceHT        string  `json:"price_ht"`
+	PriceTTC       string  `json:"price_ttc"`
+	Quantity       int     `json:"quantity"`
+	TotalPriceHT   float64 `json:"total_price_ht"`
+	TotalPriceWTax float64 `json:"total_price_ttc"`
 }

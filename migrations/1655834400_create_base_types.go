@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"c_bin_pocketbase/constants"
 	"log"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -14,7 +15,7 @@ func init() {
 		// --- taxes ---
 		log.Println("Colection creating: taxes")
 
-		taxesCollection := core.NewBaseCollection("tax_rates")
+		taxesCollection := core.NewBaseCollection(constants.TableTaxRates)
 		taxesCollection.Fields.Add(&core.TextField{Name: "description"})
 		taxesCollection.Fields.Add(&core.TextField{Name: "type", Required: true})
 
@@ -69,7 +70,7 @@ func init() {
 
 		// --- categories ---
 		log.Println("Colection creating: categories")
-		categoriesCollection := core.NewBaseCollection("categories")
+		categoriesCollection := core.NewBaseCollection(constants.TableStoreCategories)
 		categoriesCollection.Fields.Add(&core.TextField{Name: "name", Required: true})
 		categoriesCollection.Fields.Add(&core.NumberField{Name: "category_id"})
 		categoriesCollection.Fields.Add(&core.NumberField{Name: "column"})
@@ -87,7 +88,7 @@ func init() {
 
 		// --- payment_methods ---
 		log.Println("Colection creating: payment_methods")
-		paymentMethodsCollection := core.NewBaseCollection("payment_methods")
+		paymentMethodsCollection := core.NewBaseCollection(constants.TablePaymentMethods)
 		paymentMethodsCollection.Fields.Add(&core.TextField{Name: "name", Required: true})
 		paymentMethodsCollection.Fields.Add(&core.TextField{Name: "type", Required: true})
 		paymentMethodsCollection.Fields.Add(&core.BoolField{Name: "status"})
@@ -107,7 +108,7 @@ func init() {
 			{
 				"type":   "TRANSFER",
 				"status": true,
-				"name":   "Virement bancaire",
+				"name":   "Virement Bancaire",
 			},
 			{
 				"type":   "CHECK",
@@ -117,7 +118,7 @@ func init() {
 			{
 				"type":   "VOUCHER",
 				"status": true,
-				"name":   "Bon d'achat",
+				"name":   "Bon d'Achat",
 			},
 			{
 				"type":   "TICKET RESTAURANT CARD",
@@ -127,12 +128,12 @@ func init() {
 			{
 				"type":   "TICKET RESTAURANT",
 				"status": true,
-				"name":   "Ticket restaurant",
+				"name":   "Ticket Restaurant",
 			},
 			{
 				"type":   "CARD",
 				"status": true,
-				"name":   "Carte bancaire",
+				"name":   "Carte Bancaire",
 			},
 			{
 				"type":   "CASH",
