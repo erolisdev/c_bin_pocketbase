@@ -187,12 +187,12 @@ func VerifyOrder(app *pocketbase.PocketBase, orderInput models.OrderModel) (*mod
 			return nil, fmt.Errorf("failed to fetch products: %w", productErr)
 		}
 
-		for _, rec := range dbProductRecords {
-			log.Println("======================== =============================")
-			log.Println("Prd rec: ", rec.PublicExport())
-			// log.Println("Prd Expanded All:", rec.ExpandedOne("tax_rate").PublicExport())
-			log.Println("======================== =============================")
-		}
+		// for _, rec := range dbProductRecords {
+		// 	log.Println("======================== =============================")
+		// 	log.Println("Prd rec: ", rec.PublicExport())
+		// 	// log.Println("Prd Expanded All:", rec.ExpandedOne("tax_rate").PublicExport())
+		// 	log.Println("======================== =============================")
+		// }
 	}
 
 	// dbProductPricesMap := make(map[string]float64) // Key: string(ProductID)
@@ -259,7 +259,7 @@ func VerifyOrder(app *pocketbase.PocketBase, orderInput models.OrderModel) (*mod
 		for inputOptionID, orderOVsInGroup := range groupedOrderOptionValues {
 			// inputOptionIDStr -> Bu, istemcinin gönderdiği OptionID. Bunun DB'deki option_id'ye karşılık geldiğini varsayıyoruz.
 			rules, rulesExist := optionRulesMap[inputOptionID] // Use inputOptionIDStr as key if it maps directly to DB's option_id
-			fmt.Println("Processing option group ID:", inputOptionID, "with name", rules.Name, "rules", rules, "max count", rules.MaxCount, "free count", rules.FreeCount, "type")
+			// fmt.Println("Processing option group ID:", inputOptionID, "with name", rules.Name, "rules", rules, "max count", rules.MaxCount, "free count", rules.FreeCount, "type")
 
 			if !rulesExist {
 				var firstOVName string
@@ -308,7 +308,7 @@ func VerifyOrder(app *pocketbase.PocketBase, orderInput models.OrderModel) (*mod
 
 				if rules.OptionType == models.Radio {
 					dbSideOptionsPriceForOneProductUnit += dbOVData.PriceTTC
-					fmt.Println(rules.OptionType, dbOVData.Name, "price:", dbOVData.PriceTTC, "dbSideOptionsPriceForOneProductUnit", dbSideOptionsPriceForOneProductUnit)
+					// fmt.Println(rules.OptionType, dbOVData.Name, "price:", dbOVData.PriceTTC, "dbSideOptionsPriceForOneProductUnit", dbSideOptionsPriceForOneProductUnit)
 				} else {
 					// DB-side price calculation
 					// orderOptionQuantity float64 olduğu için, tam sayı adetler üzerinden ücretsiz kontrolü
@@ -337,10 +337,10 @@ func VerifyOrder(app *pocketbase.PocketBase, orderInput models.OrderModel) (*mod
 							dbSideOptionsPriceForOneProductUnit += dbOVData.PriceTTC // PriceTTC is per unit of option value
 						}
 
-						fmt.Println(rules.OptionType, dbOVData.Name, "price:", dbOVData.PriceTTC, "dbSideOptionsPriceForOneProductUnit", dbSideOptionsPriceForOneProductUnit)
+						// fmt.Println(rules.OptionType, dbOVData.Name, "price:", dbOVData.PriceTTC, "dbSideOptionsPriceForOneProductUnit", dbSideOptionsPriceForOneProductUnit)
 
 					}
-					fmt.Println("dbSideOptionsPriceForOneProductUnit", dbSideOptionsPriceForOneProductUnit)
+					// fmt.Println("dbSideOptionsPriceForOneProductUnit", dbSideOptionsPriceForOneProductUnit)
 
 				}
 

@@ -4,6 +4,7 @@ import (
 	"c_bin_pocketbase/constants"
 	"c_bin_pocketbase/models"
 	"fmt"
+	"strings"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -27,19 +28,19 @@ func SaveOrder(app *pocketbase.PocketBase, orderData *models.OrderData) (*int, e
 		return nil, err
 	}
 
-	orderNumber, err := GetOrderNumber(app)
-
 	err = app.RunInTransaction(func(txApp core.App) error {
 
 		if err != nil {
 			return fmt.Errorf("live_orders save order number: '%s'", err.Error())
 		}
-
+		orderNumber, err := GetOrderNumber(txApp)
 		orderData.OrderNumber = orderNumber
 
 		fmt.Println("========= Save order number: ", *orderData.OrderNumber, ", ", orderNumber, "==========")
 
-		orderID, err := saveOrderInfo(txApp, liveOrderCollection, *orderData)
+		// orderID, err := saveOrderInfo(txApp, liveOrderCollection, *orderData)
+		orderID, orderNumber, err := saveOrderInfoWithRetry(txApp, liveOrderCollection, *orderData, 1)
+
 		if err != nil {
 			return fmt.Errorf("live_orders save error: '%s'", err.Error())
 		}
@@ -60,8 +61,31 @@ func SaveOrder(app *pocketbase.PocketBase, orderData *models.OrderData) (*int, e
 		return nil
 	})
 
-	return orderNumber, err
+	return orderData.OrderNumber, err
 
+}
+
+func saveOrderInfoWithRetry(txApp core.App, collection *core.Collection, orderData models.OrderData, tryCount int) (string, *int, error) {
+	if tryCount > 10 {
+		return "", nil, fmt.Errorf("max retry count reached")
+	}
+
+	fmt.Printf("Saving order info (try %d)\n", tryCount)
+
+	orderID, err := saveOrderInfo(txApp, collection, orderData)
+	if err != nil {
+		if strings.Contains(err.Error(), "date: Value must be unique; order_number: Value must be unique.") {
+			// Burada yeni bir order number üretmelisiniz.
+			// Örnek:
+			orderData.OrderNumber, err = GetOrderNumber(txApp)
+
+			fmt.Printf("Retrying with new order number: %d (try %d)\n", orderData.OrderNumber, tryCount+1)
+			return saveOrderInfoWithRetry(txApp, collection, orderData, tryCount+1)
+		}
+		return "", nil, err
+	}
+
+	return orderID, orderData.OrderNumber, nil
 }
 
 func saveOrderInfo(txApp core.App, collection *core.Collection, orderData models.OrderData) (string, error) {
@@ -125,7 +149,7 @@ func saveOrderProduct(txApp core.App, collection *core.Collection, orderProduct 
 	record.Set("name", orderProduct.Name)
 	record.Set("short_name", orderProduct.Name)
 
-	fmt.Println("save product name", *orderProduct.Name)
+	// fmt.Println("save product name", *orderProduct.Name)
 
 	record.Set("unit", "U")
 	record.Set("quantity", orderProduct.Quantity)

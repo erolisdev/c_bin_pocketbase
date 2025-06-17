@@ -7,11 +7,10 @@ import (
 	"time"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func GetOrderNumber(app *pocketbase.PocketBase) (*int, error) {
+func GetOrderNumber(txApp core.App) (*int, error) {
 	orderNumber := 1
 
 	var lastSavedRecord = core.Record{}
@@ -36,9 +35,9 @@ func GetOrderNumber(app *pocketbase.PocketBase) (*int, error) {
 		endTime = startTime.AddDate(0, 0, 1) // Başlangıç saatine 1 gün ekle.
 	}
 
-	fmt.Println("startTime", startTime, "start format", startTime.Format(customLayout))
+	// fmt.Println("startTime", startTime, "start format", startTime.Format(customLayout))
 
-	err := app.RecordQuery(constants.TableLiveOrders).
+	err := txApp.RecordQuery(constants.TableLiveOrders).
 		Where(dbx.Between("created", startTime.Format(customLayout), endTime.Format(customLayout))).
 		OrderBy("order_number DESC").
 		One(&lastSavedRecord)
