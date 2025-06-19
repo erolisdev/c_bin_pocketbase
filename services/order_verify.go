@@ -351,22 +351,58 @@ func VerifyOrder(app *pocketbase.PocketBase, orderInput models.OrderModel) (*mod
 		calculatedRecordTotal += (dbProductPrice + dbSideOptionsPriceForOneProductUnit) * float64(orderProductQuantity)
 	}
 
-	// Final Verifications
+	// verification products total price
+	if !areFloatsEqual(calculatedRecordTotal, calculatedOrderTotal, 0.01) {
+		log.Printf("Products calculatedRecordTotal: %.5f, calculatedOrderTotal: %.5f", calculatedRecordTotal, calculatedOrderTotal)
+		return nil, fmt.Errorf("internal price consistency mismatch: calculated DB total %.2f, calculated client-side total %.2f. This might indicate client sent item prices that don't sum up to their own OrderInfo.TotalPrice, or a calculation discrepancy.",
+			calculatedRecordTotal, calculatedOrderTotal)
+	}
+
 	orderTotalFromInput, err := parseFloat(orderData.Total, "order total")
 	if err != nil {
 		return nil, err
 	}
 
-	if !areFloatsEqual(calculatedRecordTotal, orderTotalFromInput, 0.01) {
-		return nil, fmt.Errorf("price mismatch: calculated DB total %.2f, order info total %.2f (from input string '%s')",
-			calculatedRecordTotal, orderTotalFromInput, derefString(orderData.Total, "N/A"))
-	}
+	if derefString(orderData.ShippingCode, "0") == "6" {
 
-	// This check becomes less critical if the above one passes, but can catch internal client calculation errors.
-	if !areFloatsEqual(calculatedRecordTotal, calculatedOrderTotal, 0.01) {
-		log.Printf("Debug: calculatedRecordTotal: %.5f, calculatedOrderTotal: %.5f", calculatedRecordTotal, calculatedOrderTotal)
-		return nil, fmt.Errorf("internal price consistency mismatch: calculated DB total %.2f, calculated client-side total %.2f. This might indicate client sent item prices that don't sum up to their own OrderInfo.TotalPrice, or a calculation discrepancy.",
-			calculatedRecordTotal, calculatedOrderTotal)
+		if orderData.ShippingCityID == nil || *orderData.ShippingCityID == "" {
+			return nil, fmt.Errorf("Delivery zone city is missing")
+		}
+
+		record, err := app.FindFirstRecordByFilter(
+			constants.TableStoreZones,
+			"city_id = {:city_id}",
+			dbx.Params{"city_id": orderData.ShippingCityID},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Delivery zone not found for city: %s, Error: %s", *orderData.ShippingCityID, err.Error())
+		}
+
+		recordShippingPrice := record.GetFloat("price")
+		recordFreePrice := record.GetFloat("free_price")
+		recordMinimumPrice := record.GetFloat("minimum_price")
+
+		if recordMinimumPrice > calculatedRecordTotal {
+			return nil, fmt.Errorf("Minimum delivery cost mismatch error calculated DB total %.2f, minimum delivery cost  %.2f",
+				calculatedRecordTotal, recordMinimumPrice)
+		}
+
+		if recordFreePrice == 0 || (recordFreePrice > 0 && (calculatedRecordTotal < recordFreePrice)) {
+			calculatedRecordTotal += recordShippingPrice
+		}
+
+		// verification final totals with delivery cost
+		if !areFloatsEqual(orderTotalFromInput, calculatedRecordTotal, 0.01) {
+			return nil, fmt.Errorf("Delivery cost mismatch error: calculated DB total %.2f, order total: %.2f, DB delivery cost: %s, order delivery cost: %s",
+				calculatedRecordTotal, orderTotalFromInput, ToStringSimple(recordShippingPrice), derefString(orderData.ShippingPrice, "N/A"))
+		}
+
+	} else {
+		// verification final totals
+		if !areFloatsEqual(calculatedRecordTotal, orderTotalFromInput, 0.01) {
+			return nil, fmt.Errorf("price mismatch: calculated DB total %.2f, order info total %.2f (from input string '%s')",
+				calculatedRecordTotal, orderTotalFromInput, derefString(orderData.Total, "N/A"))
+		}
 	}
 
 	return orderData, nil

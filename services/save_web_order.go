@@ -11,7 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-func SaveOrder(app *pocketbase.PocketBase, orderData *models.OrderData) (*int, error) {
+func SaveOrder(app *pocketbase.PocketBase, orderData *models.OrderData, authID string) (*int, error) {
 
 	liveOrderCollection, err := app.FindCollectionByNameOrId(constants.TableLiveOrders)
 	if err != nil {
@@ -30,16 +30,17 @@ func SaveOrder(app *pocketbase.PocketBase, orderData *models.OrderData) (*int, e
 
 	err = app.RunInTransaction(func(txApp core.App) error {
 
-		if err != nil {
-			return fmt.Errorf("live_orders save order number: '%s'", err.Error())
-		}
 		orderNumber, err := GetOrderNumber(txApp)
+
+		if err != nil {
+			return fmt.Errorf("Order number error: '%s'", err.Error())
+		}
+
 		orderData.OrderNumber = orderNumber
 
-		fmt.Println("========= Save order number: ", *orderData.OrderNumber, ", ", orderNumber, "==========")
-
 		// orderID, err := saveOrderInfo(txApp, liveOrderCollection, *orderData)
-		orderID, orderNumber, err := saveOrderInfoWithRetry(txApp, liveOrderCollection, *orderData, 1)
+
+		orderID, err := saveOrderInfoWithRetry(txApp, liveOrderCollection, *orderData, 1, authID)
 
 		if err != nil {
 			return fmt.Errorf("live_orders save error: '%s'", err.Error())
@@ -65,30 +66,29 @@ func SaveOrder(app *pocketbase.PocketBase, orderData *models.OrderData) (*int, e
 
 }
 
-func saveOrderInfoWithRetry(txApp core.App, collection *core.Collection, orderData models.OrderData, tryCount int) (string, *int, error) {
+func saveOrderInfoWithRetry(txApp core.App, collection *core.Collection, orderData models.OrderData, tryCount int, authId string) (string, error) {
 	if tryCount > 10 {
-		return "", nil, fmt.Errorf("max retry count reached")
+		return "", fmt.Errorf("Max retry count reached for unique date-orderNumber")
 	}
 
 	fmt.Printf("Saving order info (try %d)\n", tryCount)
 
-	orderID, err := saveOrderInfo(txApp, collection, orderData)
+	orderID, err := saveOrderInfo(txApp, collection, orderData, authId)
 	if err != nil {
 		if strings.Contains(err.Error(), "date: Value must be unique; order_number: Value must be unique.") {
-			// Burada yeni bir order number üretmelisiniz.
-			// Örnek:
+
 			orderData.OrderNumber, err = GetOrderNumber(txApp)
 
-			fmt.Printf("Retrying with new order number: %d (try %d)\n", orderData.OrderNumber, tryCount+1)
-			return saveOrderInfoWithRetry(txApp, collection, orderData, tryCount+1)
+			fmt.Printf("Retrying with new order number: %d (try %d)\n", *orderData.OrderNumber, tryCount+1)
+			return saveOrderInfoWithRetry(txApp, collection, orderData, tryCount+1, authId)
 		}
-		return "", nil, err
+		return "", err
 	}
 
-	return orderID, orderData.OrderNumber, nil
+	return orderID, nil
 }
 
-func saveOrderInfo(txApp core.App, collection *core.Collection, orderData models.OrderData) (string, error) {
+func saveOrderInfo(txApp core.App, collection *core.Collection, orderData models.OrderData, authId string) (string, error) {
 
 	// collection, err := txApp.FindCollectionByNameOrId(constants.TableLiveOrders)
 	// if err != nil {
@@ -103,7 +103,7 @@ func saveOrderInfo(txApp core.App, collection *core.Collection, orderData models
 	record.Set("order_number", orderData.OrderNumber)
 
 	record.Set("process", "create")
-	record.Set("pos_number", "CUSTOMER")
+	record.Set("pos_number", "WEB")
 
 	// hesapla
 	record.Set("total_ht", orderData.Total)     //
@@ -124,13 +124,8 @@ func saveOrderInfo(txApp core.App, collection *core.Collection, orderData models
 	//TODO
 	record.Set("date", types.NowDateTime().Time().Format("2006-01-02"))
 	record.Set("customer", orderData.CustomerID)
+	record.Set("created_by", authId)
 
-	// validate and persist
-	// (use SaveNoValidate to skip fields validation)
-	// err = txApp.Save(record)
-	// if err != nil {
-	// 	return "", err
-	// }
 	if err := txApp.Save(record); err != nil {
 		return "", err
 	}
@@ -168,8 +163,6 @@ func saveOrderProduct(txApp core.App, collection *core.Collection, orderProduct 
 	record.Set("printer_id", orderProduct.PrinterID)
 	record.Set("c_sort_order", orderProduct.CSortOrder)
 	record.Set("category_id", orderProduct.CategoryID)
-
-	record.Set("created_by", "CUSTOMER")
 	record.Set("updated_by", nil)
 
 	if err := txApp.Save(record); err != nil {

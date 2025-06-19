@@ -2,11 +2,13 @@ package services
 
 import (
 	"c_bin_pocketbase/constants"
+	"c_bin_pocketbase/models"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -15,27 +17,40 @@ func GetOrderNumber(txApp core.App) (*int, error) {
 
 	var lastSavedRecord = core.Record{}
 	const customLayout = "2006-01-02 15:04:05.000Z07:00"
-
-	now := time.Now().UTC()
-	const startHour = 5
-
-	// İlgili günlerin sabah 5'ini önceden hesaplayalım.
-	todayAt5 := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, time.UTC)
-
+	var startHour, startMinute int
 	var startTime, endTime time.Time
+	now := time.Now().UTC()
 
-	// Eğer mevcut zaman, bugünün başlangıç saatinden (sabah 5) önceyse...
-	if now.Before(todayAt5) {
-		// Periyot dün sabah 5'te başladı.
-		startTime = endTime.AddDate(0, 0, -1) // Bitiş saatinden 1 gün çıkar.
-		endTime = todayAt5
+	dayRef := txApp.Store().Get("day_referece_time")
+
+	if dayRef != nil {
+		parsedTime, err := time.Parse("15:04", dayRef.(string))
+		if err == nil {
+			startHour = parsedTime.Hour()
+			startMinute = parsedTime.Minute()
+		} else {
+			startHour = 5
+			startMinute = 0
+		}
 	} else {
-		// Periyot bu sabah 5'te başladı.
-		startTime = todayAt5
-		endTime = startTime.AddDate(0, 0, 1) // Başlangıç saatine 1 gün ekle.
+		// DB'den değer dönmezse fallback değer ata
+		startHour = 5
+		startMinute = 0
 	}
 
-	// fmt.Println("startTime", startTime, "start format", startTime.Format(customLayout))
+	// İlgili günlerin sabah 5'ini önceden hesaplayalım.
+	todayAtDayRef := time.Date(now.Year(), now.Month(), now.Day(), startHour, startMinute, 0, 0, time.UTC)
+
+	// Eğer mevcut zaman, bugünün başlangıç saatinden (sabah 5) önceyse...
+	if now.Before(todayAtDayRef) {
+		// Periyot dün sabah 5'te başladı.
+		startTime = endTime.AddDate(0, 0, -1) // Bitiş saatinden 1 gün çıkar.
+		endTime = todayAtDayRef
+	} else {
+		// Periyot bu sabah 5'te başladı.
+		startTime = todayAtDayRef
+		endTime = startTime.AddDate(0, 0, 1) // Başlangıç saatine 1 gün ekle.
+	}
 
 	err := txApp.RecordQuery(constants.TableLiveOrders).
 		Where(dbx.Between("created", startTime.Format(customLayout), endTime.Format(customLayout))).
@@ -54,4 +69,21 @@ func GetOrderNumber(txApp core.App) (*int, error) {
 	}
 
 	return &orderNumber, nil
+}
+
+// onServe de yani app ilk acildiginda set edilecek
+func SaveDayReference(app *pocketbase.PocketBase) {
+	setting := models.StoreSetting{}
+
+	err := app.DB().
+		NewQuery("SELECT day_reference FROM store_settings").
+		One(&setting)
+
+	if err == nil {
+		if setting.DayRef != "" {
+			fmt.Println("set day ref: ", setting.DayRef)
+			app.Store().Set("day_referece_time", setting.DayRef)
+		}
+	}
+
 }

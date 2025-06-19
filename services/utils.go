@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 func PtrValue[T any](ptr *T) T {
@@ -31,6 +32,37 @@ func parseFloat(sVal *string, fieldName string) (float64, error) {
 		return 0.0, fmt.Errorf("invalid %s value '%s': %w", fieldName, *sVal, err)
 	}
 	return f, nil
+}
+
+func parseToInt(value interface{}) (int, error) {
+	switch v := value.(type) {
+
+	case int:
+		return v, nil
+
+	case float64:
+		return int(v), nil
+
+	case string:
+		// Önce string tamamen sayı mı kontrol et
+		v = strings.TrimSpace(v)
+
+		// Önce int çevirmeyi dene
+		if i, err := strconv.Atoi(v); err == nil {
+			return i, nil
+		}
+
+		// Eğer int değilse float çevirmeyi dene
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return int(f), nil // Kesilerek int'e çevrilir
+		}
+
+		// Eğer buraya geldiyse geçersiz string
+		return 0, fmt.Errorf("geçersiz sayı formatı: %v", v)
+
+	default:
+		return 0, fmt.Errorf("desteklenmeyen veri tipi: %T", v)
+	}
 }
 
 func derefString(s *string, defaultValue string) string {

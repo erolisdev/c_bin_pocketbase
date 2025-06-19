@@ -1,0 +1,29 @@
+{
+  "product_id": 2124,
+  "category_id": 292,
+  "image": "image/cache/catalog/24/product/300_300_assiette-kebab-poulet.png",
+  "shipping": 3,
+  "price": "13.0000",
+  "printer_id": 35,
+  "lbl_printer_id": null,
+  "sort_order": 1,
+  "show_in_suggested": false,
+  "rate": "10.0000",
+  "description": [
+    {
+      "language_id": 1,
+      "name": "Assiette Solo",
+      "description": "1 Salata"
+    },
+    {
+      "language_id": 2,
+      "name": "Assiette Solo",
+      "description": "1 Choice of meat, Bulgur and fries, Vegetables"
+    },
+    {
+      "language_id": 3,
+      "name": "Assiette Solo",
+      "description": "1 Choix de viande, Boulgour et frites"
+    }
+  ]
+}

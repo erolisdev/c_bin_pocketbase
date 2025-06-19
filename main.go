@@ -22,9 +22,11 @@ import (
 
 	// "c_bin_pocketbase/generated"
 
+	eronorhooks "c_bin_pocketbase/ehooks"
 	_ "c_bin_pocketbase/migrations" // migrations folder
 	"c_bin_pocketbase/models"
 	"c_bin_pocketbase/services"
+	"c_bin_pocketbase/utils"
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/pocketbase/dbx"
@@ -166,156 +168,23 @@ func main() {
 				e.Router.GET("/{path...}", apis.Static(os.DirFS(publicDir), indexFallback))
 			}
 
-			e.Router.GET("/hello/{name}", func(e *core.RequestEvent) error {
+			// save day refenece for orderNumber
+			services.SaveDayReference(app)
 
-				name := e.Request.PathValue("name")
-				envs := "envirenonments:\n"
+			// store products
+			e.Router.GET("/products", func(e *core.RequestEvent) error {
 
-				for _, env := range os.Environ() {
-					envs += env + "\n"
-				}
-
-				return e.String(http.StatusOK, "Hello "+name+"\n"+envs)
-			})
-
-			e.Router.GET("/orders1", func(e *core.RequestEvent) error {
-				// SQL sorgusunu kur
-				var orders []OrderResponse
-
-				// 1. Tüm order_infos kayıtlarını çek
-				// var rawOrders []models.Record
-
-				rawOrders := []*core.Record{}
-
-				err := app.RecordQuery("order_infos").
-					Select("order_infos.*").
-					OrderBy("created DESC").
-					Limit(100).
-					All(&rawOrders)
+				storeProducts, err := services.GetStoreProducts(e.App)
 
 				if err != nil {
-					return apis.NewBadRequestError("Order verileri alınamadı "+err.Error(), err)
+					return apis.NewBadRequestError("Product verileri alınamadı "+err.Error(), err)
 				}
 
-				// 2. Her order için ilişkili verileri ekle
-				for _, rec := range rawOrders {
-					order := OrderResponse{
-						Id:         rec.GetString("id"),
-						Created:    rec.GetString("created"),
-						Updated:    rec.GetString("updated"),
-						Status:     rec.GetString("status"),
-						OrderNote:  rec.GetString("orderNote"),
-						OrderTotal: rec.GetInt("orderTotal"),
-					}
-
-					// Customer
-					customerRec, _ := app.FindRecordById("customers", rec.GetString("customer"))
-					if customerRec != nil {
-						order.Customer = customerRec.PublicExport()
-					}
-
-					// Address
-					addressRec, _ := app.FindRecordById("shipping_address", rec.GetString("address"))
-					if addressRec != nil {
-						order.ShippingAddress = addressRec.PublicExport()
-					}
-
-					payments, _ := app.FindAllRecords("payments",
-						dbx.NewExp("[order] = {:orderId}", dbx.Params{"orderId": rec.Id}),
-					)
-
-					for _, p := range payments {
-						order.Payments = append(order.Payments, p.PublicExport())
-					}
-
-					// Order Items
-
-					items, errItem := app.FindAllRecords("order_items",
-						dbx.NewExp("[order] = {:orderId}", dbx.Params{"orderId": rec.Id}),
-					)
-					if errItem != nil {
-						log.Println("Error: ", errItem)
-					}
-					// log.Println("items: ", items)
-					for _, i := range items {
-						log.Println("item: ", i.PublicExport())
-						order.OrderItems = append(order.OrderItems, i.PublicExport())
-					}
-
-					orders = append(orders, order)
-				}
-
-				return e.JSON(http.StatusOK, orders)
+				return e.JSON(http.StatusOK, storeProducts)
 
 			})
 
-			e.Router.GET("/orders2", func(e *core.RequestEvent) error {
-				// SQL sorgusunu kur
-				var orders []OrderResponse
-
-				// 1. Tüm order_infos kayıtlarını çek
-				// var rawOrders []models.Record
-
-				records := []*core.Record{}
-
-				err := app.RecordQuery("order_infos").
-					Select("order_infos.*").
-					OrderBy("created DESC").
-					Limit(100).
-					All(&records)
-
-				if err != nil {
-					return apis.NewBadRequestError("Order verileri alınamadı "+err.Error(), err)
-				}
-
-				errs := app.ExpandRecords(records, []string{
-					"customer",              // single relation
-					"address",               // single relation
-					"payments_via_order",    // multiple relation
-					"order_items_via_order", // multiple relation
-				}, nil)
-
-				if len(errs) > 0 {
-					return apis.NewBadRequestError("Order verileri alınamadı: %v", errs)
-				}
-
-				// 2. Her order için ilişkili verileri ekle
-				for _, rec := range records {
-					order := OrderResponse{
-						Id:         rec.GetString("id"),
-						Created:    rec.GetString("created"),
-						Updated:    rec.GetString("updated"),
-						Status:     rec.GetString("status"),
-						OrderNote:  rec.GetString("orderNote"),
-						OrderTotal: rec.GetInt("orderTotal"),
-					}
-
-					// log.Println("record: : ", rec.PublicExport())
-
-					customer := rec.ExpandedOne("customer")
-					order.Customer = customer.PublicExport()
-
-					address := rec.ExpandedOne("address")
-					order.ShippingAddress = address.PublicExport()
-
-					payments := rec.ExpandedAll("payments_via_order")
-					for _, p := range payments {
-						order.Payments = append(order.Payments, p.PublicExport())
-					}
-
-					items := rec.ExpandedAll("order_items_via_order")
-					for _, i := range items {
-						order.OrderItems = append(order.OrderItems, i.PublicExport())
-					}
-
-					orders = append(orders, order)
-				}
-
-				return e.JSON(http.StatusOK, orders)
-
-			})
-
-			// ================
+			// Create Web Order
 			e.Router.POST("/createOrder", func(e *core.RequestEvent) error {
 
 				var order models.OrderModel
@@ -327,15 +196,14 @@ func main() {
 				orderData, err := services.VerifyOrder(app, order)
 
 				if err != nil {
-					log.Printf("=== Order verification failed: %v. Order data: %+v ===", err, order)
+					log.Printf("Order verification failed: %v. Order data: %+v ===", err, order)
 					return apis.NewBadRequestError("Order verification failed: "+err.Error(), nil)
 				}
 
 				// Save order
-				orderNumber, err := services.SaveOrder(app, orderData)
+				orderNumber, err := services.SaveOrder(app, orderData, utils.GetRequestUserIDAlias(e.Auth))
 
 				if err != nil {
-					// log.Printf("=== Order save failed: %v. Order number: %+v ===", err, orderNumber)
 					return apis.NewBadRequestError("Order save failed: "+err.Error(), nil)
 				}
 
@@ -348,16 +216,12 @@ func main() {
 			})
 			// .Bind(apis.RequireAuth()) // require auth and admin role
 
-			e.Router.GET("/list-images/:folder", func(e *core.RequestEvent) error {
-				return e.Next()
-			})
-
 			return e.Next()
 		},
 		Priority: 999, // execute as latest as possible to allow users to provide their own route
 	})
 
-	// eronorhooks.OrderNumberCreate(app)
+	eronorhooks.EronorHooks(app)
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)

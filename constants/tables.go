@@ -12,6 +12,7 @@ const (
 	TableStoreTables       string = "store_tables"
 	TableStorePrinters     string = "store_printers"
 	TableStoreSettings     string = "store_settings"
+	TableStoreZones        string = "store_zones"
 
 	//live orders
 	TableLiveOrders              string = "live_orders"
