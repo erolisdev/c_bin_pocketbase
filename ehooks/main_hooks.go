@@ -5,7 +5,7 @@ import (
 )
 
 func EronorHooks(app *pocketbase.PocketBase) {
-	ProtectionForDeleteHooks(app)
+	// ProtectionForDeleteHooks(app)
 	AuditHook(app)
 
 }
