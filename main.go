@@ -170,9 +170,12 @@ func main() {
 
 			// Cors
 			allowedOrigins := utils.GetEnvSplit("ALLOW_ORIGINS", "*")
+			origins := utils.GetEnvOrDefault("ALLOW_ORIGINS", "*")
 
 			e.Router.BindFunc(func(e *core.RequestEvent) error {
-				fmt.Println("cors middleware")
+
+				fmt.Println("cors middleware", origins)
+
 				return e.Next()
 			}).Bind(apis.CORS(
 				apis.CORSConfig{
