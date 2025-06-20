@@ -12,6 +12,57 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
+func GetStoreData(app core.App) (*models.StoreData, error) {
+	categories, err := GetStoreCategories(app)
+	if err != nil {
+		return nil, err
+	}
+
+	products, err := GetStoreProducts(app)
+	if err != nil {
+		return nil, err
+	}
+
+	storeData := models.StoreData{
+		Categories: categories,
+		Products:   products,
+	}
+
+	return &storeData, nil
+}
+
+func GetStoreCategories(app core.App) ([]models.StoreCategory, error) {
+
+	var categories []models.StoreCategory
+	var storeCategoryRecords []core.Record
+
+	err := app.RecordQuery(constants.TableStoreCategories).
+		Where(dbx.NewExp("status = {:status}", dbx.Params{"status": 1})).
+		OrderBy("sort_order ASC").
+		All(&storeCategoryRecords)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rec := range storeCategoryRecords {
+
+		category := models.StoreCategory{
+			CategoryID:      rec.GetInt("category_id"),
+			Column:          rec.GetInt("column"),
+			SortOrder:       rec.GetInt("sort_order"),
+			Image:           rec.GetString("image_url"),
+			ShowInSuggested: rec.GetInt("show_in_suggested"),
+			Name:            rec.GetString("name"),
+			Descriptions:    rec.Get("description"),
+		}
+		categories = append(categories, category)
+	}
+
+	return categories, nil
+
+}
+
 func GetStoreProducts(app core.App) ([]models.StoreProduct, error) {
 
 	records := []*core.Record{}

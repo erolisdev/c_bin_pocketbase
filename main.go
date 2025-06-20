@@ -168,21 +168,41 @@ func main() {
 				e.Router.GET("/{path...}", apis.Static(os.DirFS(publicDir), indexFallback))
 			}
 
+			// Cors
+			allowedOrigins := utils.GetEnvSplit("ALLOW_ORIGINS", "*")
+
+			e.Router.BindFunc(func(e *core.RequestEvent) error {
+				fmt.Println("cors middleware")
+				return e.Next()
+			}).Bind(apis.CORS(
+				apis.CORSConfig{
+					AllowOrigins: allowedOrigins,
+				},
+			))
+
 			// save day refenece for orderNumber
 			services.SaveDayReference(app)
 
 			// store products
 			e.Router.GET("/products", func(e *core.RequestEvent) error {
 
-				storeProducts, err := services.GetStoreProducts(e.App)
+				ip := e.RealIP()
+				fmt.Println("Real IP: ", ip)
+
+				storeData, err := services.GetStoreData(e.App)
 
 				if err != nil {
 					return apis.NewBadRequestError("Product verileri alınamadı "+err.Error(), err)
 				}
 
-				return e.JSON(http.StatusOK, storeProducts)
+				return e.JSON(http.StatusOK, storeData)
 
 			})
+			// .Bind(apis.CORS(
+			// 	apis.CORSConfig{
+			// 		AllowOrigins: allowedOrigins,
+			// 	},
+			// ))
 
 			// Create Web Order
 			e.Router.POST("/createOrder", func(e *core.RequestEvent) error {
@@ -200,6 +220,8 @@ func main() {
 					return apis.NewBadRequestError("Order verification failed: "+err.Error(), nil)
 				}
 
+				ip := e.RealIP() //ip eklemek icin
+				fmt.Println("Real IP: ", ip)
 				// Save order
 				orderNumber, err := services.SaveOrder(app, orderData, utils.GetRequestUserIDAlias(e.Auth))
 
